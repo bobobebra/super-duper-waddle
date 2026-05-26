@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <title>Geometry Dash</title>
+  <style>
+    * { margin: 0; padding: 0; }
+    body { overflow: hidden; }
+    canvas { display: block; margin: 0 auto; }
+    .level-picker {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      z-index: 9998;
+      min-width: 300px;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      background: linear-gradient(135deg, rgba(18, 36, 56, 0.9), rgba(8, 14, 26, 0.9));
+      color: #e7f8ff;
+      font: 12px/1.4 Consolas, monospace;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+    }
+    .level-picker h2 {
+      font: 700 12px/1.2 Consolas, monospace;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+      color: #9de8ff;
+    }
+    .level-picker .row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .level-picker select,
+    .level-picker button {
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      background: rgba(0, 0, 0, 0.35);
+      color: #e7f8ff;
+      padding: 6px 8px;
+      font: 12px/1.2 Consolas, monospace;
+    }
+    .level-picker select {
+      flex: 1;
+      min-width: 0;
+    }
+    .level-picker button {
+      cursor: pointer;
+      background: linear-gradient(180deg, #26b6d4, #1b7995);
+      color: #f4feff;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+    .level-picker .song {
+      margin-top: 6px;
+      color: #8fe0ff;
+      opacity: 0.9;
+    }
+    @media (max-width: 700px) {
+      .level-picker {
+        left: 10px;
+        right: 10px;
+        top: 10px;
+        min-width: 0;
+      }
+    }
+  </style>
+  <script defer src="./vendor.js"></script>
+  <script defer src="./game.js"></script>
+  <script>
+    function showBootError(message) {
+      var panel = document.createElement('pre');
+      panel.textContent = message;
+      panel.style.position = 'fixed';
+      panel.style.left = '12px';
+      panel.style.right = '12px';
+      panel.style.top = '12px';
+      panel.style.zIndex = '99999';
+      panel.style.padding = '10px 12px';
+      panel.style.background = 'rgba(0,0,0,0.85)';
+      panel.style.color = '#ff7878';
+      panel.style.border = '1px solid #ff4d4f';
+      panel.style.borderRadius = '8px';
+      panel.style.font = '12px/1.4 Consolas, monospace';
+      panel.style.whiteSpace = 'pre-wrap';
+      document.body.appendChild(panel);
+    }
+
+    window.addEventListener('error', function (event) {
+      showBootError('Runtime error: ' + (event.message || 'unknown'));
+    });
+
+    window.addEventListener('unhandledrejection', function (event) {
+      var reason = event && event.reason ? String(event.reason) : 'unknown';
+      showBootError('Unhandled rejection: ' + reason);
+    });
+
+    var LEVELS = [
+      { id: 1, name: 'Stereo Madness', song: 'StereoMadness.mp3' },
+      { id: 2, name: 'Back on Track', song: 'BackOnTrack.mp3' },
+      { id: 3, name: 'Polargeist', song: 'Polargeist.mp3' },
+      { id: 4, name: 'Dry Out', song: 'DryOut.mp3' },
+      { id: 5, name: 'Base After Base', song: 'BaseAfterBase.mp3' },
+      { id: 6, name: "Can't Let Go", song: 'CantLetGo.mp3' },
+      { id: 7, name: 'Jumper', song: 'Jumper.mp3' },
+      { id: 8, name: 'Time Machine', song: 'TimeMachine.mp3' },
+      { id: 9, name: 'Cycles', song: 'Cycles.mp3' },
+      { id: 10, name: 'xStep', song: 'xStep.mp3' },
+      { id: 11, name: 'Clutterfunk', song: 'Clutterfunk.mp3' },
+      { id: 12, name: 'Theory of Everything', song: 'TheoryOfEverything.mp3' },
+      { id: 13, name: 'Electroman Adventures', song: 'Electroman.mp3' },
+      { id: 14, name: 'Clubstep', song: 'Clubstep.mp3' },
+      { id: 15, name: 'Electrodynamix', song: 'Electrodynamix.mp3' },
+      { id: 16, name: 'Hexagon Force', song: 'HexagonForce.mp3' },
+      { id: 17, name: 'Blast Processing', song: 'BlastProcessing.mp3' },
+      { id: 18, name: 'Theory of Everything 2', song: 'TheoryOfEverything2.mp3' },
+      { id: 19, name: 'Geometrical Dominator', song: 'GeometricalDominator.mp3' },
+      { id: 20, name: 'Deadlocked', song: 'Deadlocked.mp3' },
+      { id: 21, name: 'Fingerdash', song: 'Fingerdash.mp3' },
+      { id: 22, name: 'Dash', song: 'Dash.mp3' }
+    ];
+
+    function selectedLevelMeta() {
+      var params = new URLSearchParams(window.location.search);
+      var level = parseInt(params.get('level') || '1', 10);
+      if (!Number.isFinite(level)) level = 1;
+      return LEVELS.find(function (entry) { return entry.id === level; }) || LEVELS[0];
+    }
+
+    function updateTitleFromQuery() {
+      var meta = selectedLevelMeta();
+      document.title = 'Geometry Dash - ' + meta.name;
+    }
+
+    function mountLevelSelector() {
+      var meta = selectedLevelMeta();
+      var wrap = document.createElement('section');
+      wrap.className = 'level-picker';
+      wrap.innerHTML =
+        '<h2>Level Selector</h2>' +
+        '<div class="row">' +
+          '<select id="gdLevelSelect"></select>' +
+          '<button id="gdLevelLoad" type="button">Load</button>' +
+        '</div>' +
+        '<div class="song" id="gdSongInfo"></div>';
+      document.body.appendChild(wrap);
+
+      var select = document.getElementById('gdLevelSelect');
+      var songInfo = document.getElementById('gdSongInfo');
+      LEVELS.forEach(function (entry) {
+        var option = document.createElement('option');
+        option.value = String(entry.id);
+        option.textContent = entry.id + '. ' + entry.name;
+        if (entry.id === meta.id) option.selected = true;
+        select.appendChild(option);
+      });
+
+      function refreshSongInfo() {
+        var id = parseInt(select.value, 10);
+        var current = LEVELS.find(function (entry) { return entry.id === id; }) || LEVELS[0];
+        songInfo.textContent = 'Song: ' + current.song;
+      }
+      refreshSongInfo();
+      select.addEventListener('change', refreshSongInfo);
+
+      document.getElementById('gdLevelLoad').addEventListener('click', function () {
+        var params = new URLSearchParams(window.location.search);
+        params.set('level', select.value);
+        window.location.search = params.toString();
+      });
+    }
+
+    updateTitleFromQuery();
+
+    window.addEventListener('load', function () {
+      mountLevelSelector();
+      setTimeout(function () {
+        var hasCanvas = !!document.querySelector('canvas');
+        if (!hasCanvas) {
+          var hasPhaser = typeof window.Phaser !== 'undefined';
+          showBootError('Boot watchdog: no canvas created. Phaser loaded: ' + hasPhaser + '. Open DevTools Network and confirm reconstructed_vendor_bundle.js and reconstructed_game_logic.js return 200.');
+        }
+      }, 1200);
+    });
+
+    // Keep resize behavior aligned with the original runner.
+    new ResizeObserver(() => {
+      window.dispatchEvent(new Event('resize'));
+    }).observe(document.documentElement);
+  </script>
+</head>
+<body>
+  <!-- Dev Menu trigger button -->
+  <button class="dev-trigger-btn" id="devMenuBtn">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    Dev Menu
+  </button>
+
+  <!-- Dev Menu modal container -->
+  <div class="dev-modal-backdrop" id="devMenuModal">
+    <div class="dev-modal-window">
+      <div class="dev-modal-header">
+        <h2>Geometry Dash Hacks</h2>
+        <button class="dev-modal-close" id="devMenuClose">&times;</button>
+      </div>
+      <div class="dev-modal-content">
+        <!-- PASSWORD GATE -->
+        <div class="dev-passcode-gate" id="devPasscodeGate">
+          <p>This menu is restricted. Please enter the passcode to unlock developer tools and hacks.</p>
+          <input type="password" class="dev-input-field" id="devPasscodeInput" placeholder="ENTER PASSWORD">
+          <button class="dev-btn-primary" id="devUnlockBtn">UNLOCK</button>
+          <div id="devPasscodeError" style="color: #ff4d4f; font-size: 11px; margin-top: 5px; height: 14px;"></div>
+        </div>
+
+        <!-- SETTINGS PANEL -->
+        <div class="dev-settings-panel" id="devSettingsPanel">
+          <div class="dev-section-title">Cheats & Hacks</div>
+          
+          <div class="dev-option-row">
+            <div>
+              <div class="dev-option-label">Noclip Mode</div>
+              <div class="dev-option-desc">Makes you invulnerable to spikes/hazards. Ground snapping active.</div>
+            </div>
+            <label class="dev-switch">
+              <input type="checkbox" id="hackNoclip">
+              <span class="dev-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-option-row">
+            <div>
+              <div class="dev-option-label">Show Hitboxes</div>
+              <div class="dev-option-desc">Draws physical colliders for obstacles and the player in real-time.</div>
+            </div>
+            <label class="dev-switch">
+              <input type="checkbox" id="hackHitboxes">
+              <span class="dev-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-option-row">
+            <div>
+              <div class="dev-option-label">Rainbow Player</div>
+              <div class="dev-option-desc">Cycles your character sprites through vibrant rainbow tints.</div>
+            </div>
+            <label class="dev-switch">
+              <input type="checkbox" id="hackRainbow">
+              <span class="dev-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-section-title">Physics & Tweaks</div>
+
+          <div class="dev-range-group">
+            <div class="dev-range-header">
+              <span>Game & Music Speed</span>
+              <span class="dev-range-val" id="valSpeed">1.0x</span>
+            </div>
+            <input type="range" class="dev-range-input" id="tweakSpeed" min="0.1" max="2.0" step="0.1" value="1.0">
+            <div class="dev-range-presets">
+              <button class="dev-preset-btn" onclick="setSpeedPreset(0.2)">0.2x</button>
+              <button class="dev-preset-btn" onclick="setSpeedPreset(0.5)">0.5x</button>
+              <button class="dev-preset-btn" onclick="setSpeedPreset(1.0)">1.0x (Normal)</button>
+              <button class="dev-preset-btn" onclick="setSpeedPreset(1.5)">1.5x</button>
+              <button class="dev-preset-btn" onclick="setSpeedPreset(2.0)">2.0x</button>
+            </div>
+          </div>
+
+          <div class="dev-range-group">
+            <div class="dev-range-header">
+              <span>Jump Force Multiplier</span>
+              <span class="dev-range-val" id="valJump">1.0x</span>
+            </div>
+            <input type="range" class="dev-range-input" id="tweakJump" min="0.5" max="3.0" step="0.1" value="1.0">
+            <div class="dev-range-presets">
+              <button class="dev-preset-btn" onclick="setJumpPreset(0.8)">0.8x</button>
+              <button class="dev-preset-btn" onclick="setJumpPreset(1.0)">1.0x (Normal)</button>
+              <button class="dev-preset-btn" onclick="setJumpPreset(1.5)">1.5x</button>
+              <button class="dev-preset-btn" onclick="setJumpPreset(2.0)">2.0x</button>
+            </div>
+          </div>
+
+          <div class="dev-range-group">
+            <div class="dev-range-header">
+              <span>Gravity Multiplier</span>
+              <span class="dev-range-val" id="valGravity">1.0x</span>
+            </div>
+            <input type="range" class="dev-range-input" id="tweakGravity" min="0.2" max="2.5" step="0.1" value="1.0">
+            <div class="dev-range-presets">
+              <button class="dev-preset-btn" onclick="setGravityPreset(0.5)">0.5x (Floaty)</button>
+              <button class="dev-preset-btn" onclick="setGravityPreset(1.0)">1.0x (Normal)</button>
+              <button class="dev-preset-btn" onclick="setGravityPreset(1.5)">1.5x</button>
+            </div>
+          </div>
+
+          <div class="dev-section-title">Hacky Actions</div>
+
+          <div class="dev-option-row">
+            <div>
+              <div class="dev-option-label">Manual Gravity Flip Hotkey</div>
+              <div class="dev-option-desc">Enables pressing the 'G' key to flip gravity.</div>
+            </div>
+            <label class="dev-switch">
+              <input type="checkbox" id="hackGKey" checked>
+              <span class="dev-slider"></span>
+            </label>
+          </div>
+
+          <div class="dev-actions-grid">
+            <button class="dev-action-btn" id="actFlipGravity">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 16 4 4 4-4"></path><path d="M7 20V4"></path><path d="m21 8-4-4-4 4"></path><path d="M17 4v16"></path></svg>
+              Flip Gravity
+            </button>
+            <button class="dev-action-btn" id="actToggleFly">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+              Toggle Fly Mode
+            </button>
+            <button class="dev-action-btn" id="actInstantWin" style="grid-column: span 2; background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.25);">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" x2="4" y1="22" y2="15"></line></svg>
+              Instant Win Level
+            </button>
+            <button class="dev-action-btn danger" id="actRestart" style="grid-column: span 2;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M16 3h5v5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 21H3v-5"></path></svg>
+              Restart Level
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    /* Dev Menu UI Stylesheet using Outfit Font and Premium Dark Theme styling */
+    .dev-trigger-btn, .dev-modal-window, .dev-input-field, .dev-btn-primary, .dev-action-btn, .dev-preset-btn, .dev-option-label, .dev-option-desc, .dev-range-header {
+      font-family: 'Outfit', sans-serif !important;
+    }
+
+    .dev-trigger-btn {
+      position: fixed;
+      bottom: 14px;
+      left: 14px;
+      z-index: 9999;
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.8), rgba(236, 72, 153, 0.8));
+      color: white;
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 10px 16px;
+      border-radius: 30px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(168, 85, 247, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+      backdrop-filter: blur(8px);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dev-trigger-btn:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 25px rgba(168, 85, 247, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.4);
+      border-color: rgba(255, 255, 255, 0.5);
+    }
+    .dev-trigger-btn:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    .dev-modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(4, 8, 17, 0.7);
+      backdrop-filter: blur(12px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+    .dev-modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .dev-modal-window {
+      background: linear-gradient(135deg, rgba(13, 22, 38, 0.95), rgba(7, 11, 22, 0.95));
+      border: 1px solid rgba(168, 85, 247, 0.3);
+      width: 90%;
+      max-width: 440px;
+      border-radius: 20px;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), 0 0 30px rgba(168, 85, 247, 0.15);
+      overflow: hidden;
+      color: #e2f1f9;
+      transform: scale(0.9);
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .dev-modal-backdrop.active .dev-modal-window {
+      transform: scale(1);
+    }
+
+    .dev-modal-header {
+      padding: 18px 24px;
+      background: rgba(168, 85, 247, 0.08);
+      border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dev-modal-header h2 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      background: linear-gradient(90deg, #d8b4fe, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .dev-modal-close {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      transition: color 0.2s;
+    }
+    .dev-modal-close:hover {
+      color: #f472b6;
+    }
+
+    .dev-modal-content {
+      padding: 24px;
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+
+    .dev-passcode-gate {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      text-align: center;
+      padding: 10px 0;
+    }
+    .dev-passcode-gate p {
+      color: #94a3b8;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .dev-input-field {
+      width: 80%;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(168, 85, 247, 0.35);
+      border-radius: 8px;
+      padding: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      text-align: center;
+      letter-spacing: 0.15em;
+      outline: none;
+      transition: all 0.3s;
+    }
+    .dev-input-field:focus {
+      border-color: #a855f7;
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.4);
+      background: rgba(0, 0, 0, 0.6);
+    }
+    .dev-btn-primary {
+      background: linear-gradient(135deg, #a855f7, #ec4899);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(168, 85, 247, 0.35);
+      transition: all 0.2s;
+    }
+    .dev-btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(168, 85, 247, 0.45);
+    }
+    .dev-btn-primary:active {
+      transform: translateY(0);
+    }
+
+    .dev-settings-panel {
+      display: none;
+    }
+    .dev-settings-panel.active {
+      display: block;
+    }
+    .dev-section-title {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #c084fc;
+      margin-bottom: 12px;
+      margin-top: 22px;
+      border-left: 3px solid #ec4899;
+      padding-left: 8px;
+    }
+    .dev-section-title:first-of-type {
+      margin-top: 0;
+    }
+
+    .dev-option-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .dev-option-label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .dev-option-desc {
+      font-size: 11px;
+      color: #94a3b8;
+      margin-top: 2px;
+      max-width: 280px;
+    }
+
+    .dev-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 22px;
+      flex-shrink: 0;
+    }
+    .dev-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .dev-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      transition: .3s;
+      border-radius: 22px;
+    }
+    .dev-slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: #94a3b8;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    .dev-switch input:checked + .dev-slider {
+      background-color: rgba(168, 85, 247, 0.25);
+      border-color: rgba(168, 85, 247, 0.5);
+    }
+    .dev-switch input:checked + .dev-slider:before {
+      transform: translateX(22px);
+      background-color: #f472b6;
+      box-shadow: 0 0 8px #f472b6;
+    }
+
+    .dev-range-group {
+      padding: 14px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .dev-range-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .dev-range-val {
+      color: #f472b6;
+      font-weight: 800;
+    }
+    .dev-range-input {
+      width: 100%;
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.08);
+      height: 6px;
+      border-radius: 3px;
+      outline: none;
+      margin: 8px 0;
+    }
+    .dev-range-input::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #a855f7;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(168, 85, 247, 0.5);
+      transition: background 0.2s;
+    }
+    .dev-range-input::-webkit-slider-thumb:hover {
+      background: #ec4899;
+      box-shadow: 0 0 10px #ec4899;
+    }
+    .dev-range-presets {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .dev-preset-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      font-size: 10px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .dev-preset-btn:hover {
+      background: rgba(168, 85, 247, 0.2);
+      color: #fff;
+      border-color: #a855f7;
+    }
+
+    .dev-actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      padding: 12px 0 6px 0;
+    }
+    .dev-action-btn {
+      background: rgba(168, 85, 247, 0.08);
+      border: 1px solid rgba(168, 85, 247, 0.22);
+      color: #e2f1f9;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .dev-action-btn:hover {
+      background: rgba(168, 85, 247, 0.22);
+      border-color: #a855f7;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
+    }
+    .dev-action-btn:active {
+      transform: scale(0.97);
+    }
+    .dev-action-btn.danger {
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.22);
+    }
+    .dev-action-btn.danger:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgb(239, 68, 68);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.2);
+    }
+  </style>
+
+  <script>
+    (function() {
+      // Elements
+      const devMenuBtn = document.getElementById('devMenuBtn');
+      const devMenuModal = document.getElementById('devMenuModal');
+      const devMenuClose = document.getElementById('devMenuClose');
+      const devPasscodeGate = document.getElementById('devPasscodeGate');
+      const devSettingsPanel = document.getElementById('devSettingsPanel');
+      const devPasscodeInput = document.getElementById('devPasscodeInput');
+      const devUnlockBtn = document.getElementById('devUnlockBtn');
+      const devPasscodeError = document.getElementById('devPasscodeError');
+
+      // Toggles and inputs
+      const hackNoclip = document.getElementById('hackNoclip');
+      const hackHitboxes = document.getElementById('hackHitboxes');
+      const hackRainbow = document.getElementById('hackRainbow');
+      const tweakSpeed = document.getElementById('tweakSpeed');
+      const tweakJump = document.getElementById('tweakJump');
+      const tweakGravity = document.getElementById('tweakGravity');
+      const hackGKey = document.getElementById('hackGKey');
+      const valSpeed = document.getElementById('valSpeed');
+      const valJump = document.getElementById('valJump');
+      const valGravity = document.getElementById('valGravity');
+
+      // Buttons
+      const actFlipGravity = document.getElementById('actFlipGravity');
+      const actToggleFly = document.getElementById('actToggleFly');
+      const actInstantWin = document.getElementById('actInstantWin');
+      const actRestart = document.getElementById('actRestart');
+
+      // Password verification
+      const checkUnlock = () => {
+        if (localStorage.getItem('devMenuUnlocked') === 'true') {
+          devPasscodeGate.style.display = 'none';
+          devSettingsPanel.classList.add('active');
+          return true;
+        } else {
+          devPasscodeGate.style.display = 'flex';
+          devSettingsPanel.classList.remove('active');
+          return false;
+        }
+      };
+
+      // Modal triggers
+      devMenuBtn.addEventListener('click', () => {
+        devMenuModal.classList.add('active');
+        checkUnlock();
+      });
+
+      const closeModal = () => {
+        devMenuModal.classList.remove('active');
+      };
+      devMenuClose.addEventListener('click', closeModal);
+      devMenuModal.addEventListener('click', (e) => {
+        if (e.target === devMenuModal) closeModal();
+      });
+
+      devUnlockBtn.addEventListener('click', () => {
+        if (devPasscodeInput.value === 'hello') {
+          localStorage.setItem('devMenuUnlocked', 'true');
+          devPasscodeError.textContent = '';
+          checkUnlock();
+        } else {
+          devPasscodeError.textContent = 'Incorrect password!';
+          devPasscodeInput.value = '';
+          devPasscodeInput.focus();
+        }
+      });
+
+      devPasscodeInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') devUnlockBtn.click();
+      });
+
+      // Synchronize states to window globals
+      const syncState = () => {
+        window.noclipEnabled = hackNoclip.checked;
+        window.showHitboxesEnabled = hackHitboxes.checked;
+        window.rainbowTintEnabled = hackRainbow.checked;
+        window.gameSpeed = parseFloat(tweakSpeed.value);
+        window.jumpMultiplier = parseFloat(tweakJump.value);
+        window.gravityMultiplier = parseFloat(tweakGravity.value);
+        window.gKeyEnabled = hackGKey.checked;
+
+        // Apply audio speed change dynamically if playing
+        if (window.activeGameScene && window.activeGameScene._audio && window.activeGameScene._audio._music) {
+          window.activeGameScene._audio._music.rate = window.gameSpeed;
+        }
+      };
+
+      // Listen for changes
+      hackNoclip.addEventListener('change', syncState);
+      hackHitboxes.addEventListener('change', syncState);
+      hackRainbow.addEventListener('change', syncState);
+      hackGKey.addEventListener('change', syncState);
+
+      tweakSpeed.addEventListener('input', () => {
+        valSpeed.textContent = tweakSpeed.value + 'x';
+        syncState();
+      });
+      tweakJump.addEventListener('input', () => {
+        valJump.textContent = tweakJump.value + 'x';
+        syncState();
+      });
+      tweakGravity.addEventListener('input', () => {
+        valGravity.textContent = tweakGravity.value + 'x';
+        syncState();
+      });
+
+      // Presets
+      window.setSpeedPreset = (val) => {
+        tweakSpeed.value = val;
+        valSpeed.textContent = val + 'x';
+        syncState();
+      };
+      window.setJumpPreset = (val) => {
+        tweakJump.value = val;
+        valJump.textContent = val + 'x';
+        syncState();
+      };
+      window.setGravityPreset = (val) => {
+        tweakGravity.value = val;
+        valGravity.textContent = val + 'x';
+        syncState();
+      };
+
+      // Action buttons
+      actFlipGravity.addEventListener('click', () => {
+        if (window.activeGameScene && window.activeGameScene._player) {
+          window.activeGameScene._player._applyGravityPortal(!window.activeGameScene._state.gravityFlipped);
+        }
+      });
+
+      actToggleFly.addEventListener('click', () => {
+        if (window.activeGameScene && window.activeGameScene._player) {
+          if (window.activeGameScene._state.isFlying) {
+            window.activeGameScene._player.exitShipMode();
+          } else {
+            window.activeGameScene._player.enterShipMode();
+          }
+        }
+      });
+
+      actInstantWin.addEventListener('click', () => {
+        if (window.activeGameScene) {
+          window.activeGameScene._levelWon = true;
+          window.activeGameScene._endPortalGameY = window.activeGameScene._level._endPortalGameY || 240;
+          window.activeGameScene._triggerEndPortal();
+          closeModal();
+        }
+      });
+
+      actRestart.addEventListener('click', () => {
+        if (window.activeGameScene) {
+          window.activeGameScene._restartLevel();
+          closeModal();
+        }
+      });
+
+      // Initialize
+      syncState();
+    })();
+  </script>
+</body>
+</html>
